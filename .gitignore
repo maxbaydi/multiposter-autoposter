@@ -1,0 +1,96 @@
+# Конфигурационные файлы с конфиденциальными данными
+config.json
+*.json.local
+*.json.prod
+.env
+.env.local
+.env.production
+
+# Файлы базы данных
+*.db
+*.sqlite
+*.sqlite3
+autoposter.db
+
+# Логи
+*.log
+logs/
+autoposter.log
+nohup.out
+
+# Временные файлы
+*.tmp
+*.temp
+autoposter.stop
+autoposter.restart
+autoposter.health
+autoposter.publish_now
+autoposter.status
+autoposter.reset_today
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS файлы
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Личные заметки
+notes.txt
+todo.txt
+*.personal
+
+# Временные файлы изображений с водяными знаками
+img/*/*_wm.jpg
+img/*/*_wm.png
+img/*/*_watermarked.*
+
+# Системные файлы
+.coverage
+.pytest_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Резервные копии
+*.backup
+*.bak
+*.old
+
+# Большие файлы (добавить при необходимости)
+# *.zip
+# *.tar.gz 

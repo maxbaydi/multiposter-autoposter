@@ -1,0 +1,31 @@
+# MultiPoster AutoPoster Requirements
+# Основные зависимости для работы autoposter
+
+# HTTP клиент для запросов к APIs
+requests>=2.31.0
+
+# Библиотека для работы с изображениями (водяные знаки, обработка)
+Pillow>=10.0.0
+
+# Совместимая версия urllib3 для старых OpenSSL
+urllib3>=1.26.0,<2.0.0
+
+# SSL сертификаты
+certifi>=2023.0.0
+charset-normalizer>=3.0.0
+idna>=3.0
+
+# Для работы с JSON и HTTP аутентификацией (уже включены в requests, но указаны для ясности)
+# json - встроенная библиотека Python
+# sqlite3 - встроенная библиотека Python  
+# os, sys, re, glob, html, datetime - встроенные библиотеки Python
+
+# Опциональные зависимости для улучшенной работы
+setuptools>=65.0.0
+wheel>=0.40.0
+
+# Optional: JSON обработка (встроена в Python 3.8+)
+# json5  # Если понадобится расширенная поддержка JSON
+
+# Дополнительные утилиты
+python-dateutil>=2.8.0 

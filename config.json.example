@@ -1,0 +1,47 @@
+{
+    "wordpress": {
+        "url": "https://your-wordpress-site.com",
+        "user": "your-wordpress-username",
+        "password": "your-wordpress-app-password",
+        "category_id": 50,
+        "timeout": 30
+    },
+    "telegram": {
+        "token": "1234567890:ABCdefGHIjklMNOpqrsTUVwxyz",
+        "chat_id": "-1001234567890",
+        "timeout": 30,
+        "image_timeout": 60,
+        "format": {
+            "max_length": 800,
+            "prefix": "🌐 Your Brand ",
+            "suffix": "• More at your-site.com •",
+            "default_url": "https://your-site.com/",
+            "emoji_styles": ["🔹", "📌", "⚡️", "✅", "💡", "🔥"],
+            "add_emoji_to_headings": true,
+            "use_explicit_line_breaks": true,
+            "add_double_breaks_after_headings": true,
+            "bullet_symbol": "•"
+        }
+    },
+    "gpt": {
+        "api_key": "sk-your-api-key-here",
+        "url": "https://api.vsegpt.ru/v1"
+    },
+    "publishing": {
+        "posts_per_day": 3,
+        "publish_window": [8, 20],
+        "interval_min": 1800,
+        "interval_max": 10800,
+        "post_delay": 60,
+        "cycle_restart_delay": 60
+    },
+    "logging": {
+        "max_file_size": 10485760,
+        "backup_count": 5,
+        "encoding": "utf-8"
+    },
+    "system": {
+        "check_interval": 60,
+        "image_base_path": "./img"
+    }
+} 

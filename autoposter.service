@@ -1,0 +1,32 @@
+[Unit]
+Description=AutoPoster KeepAlive Service
+Documentation=man:systemd.service
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/u2946491/data/autoposter
+ExecStart=/var/www/u2946491/data/autoposter/keepalive.sh start
+ExecStop=/var/www/u2946491/data/autoposter/keepalive.sh stop
+ExecReload=/var/www/u2946491/data/autoposter/keepalive.sh restart
+Restart=always
+RestartSec=30
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=autoposter-keepalive
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/www/u2946491/data/autoposter
+
+# Environment
+Environment=PYTHONPATH=/var/www/u2946491/data/autoposter
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=multi-user.target 

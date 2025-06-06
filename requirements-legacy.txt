@@ -1,0 +1,17 @@
+# AutoPoster Requirements for Legacy Servers
+# Совместимые версии для серверов с OpenSSL 1.1.0
+
+# Основные пакеты с фиксированными версиями
+urllib3==1.26.20
+requests==2.31.0
+certifi==2023.7.22
+charset-normalizer==3.3.2
+idna==3.4
+
+# Обработка изображений
+Pillow>=10.0.0
+
+# Дополнительные утилиты
+python-dateutil>=2.8.0
+setuptools>=65.0.0
+wheel>=0.40.0 
