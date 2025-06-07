@@ -25,6 +25,7 @@ HEALTH_FILE = os.path.join(BASE_DIR, 'autoposter.health')
 PUBLISH_NOW_FILE = os.path.join(BASE_DIR, 'autoposter.publish_now')
 STATUS_FILE = os.path.join(BASE_DIR, 'autoposter.status')
 RESET_TODAY_FILE = os.path.join(BASE_DIR, 'autoposter.reset_today')
+START_TIME = datetime.now()
 
 # Дефолтные значения (используются если нет в config.json)
 DEFAULT_PUBLISHING_CONFIG = {
@@ -938,8 +939,9 @@ def write_health_check():
             "status": "running",
             "pid": os.getpid(),
             "uptime": {
-                "started_at": now.isoformat(),  # Это можно улучшить, сохраняя время старта
-                "check_interval": HEALTH_CHECK_INTERVAL
+                "started_at": START_TIME.isoformat(),  # Время запуска бота
+                "check_interval": HEALTH_CHECK_INTERVAL,
+                "uptime_seconds": int((now - START_TIME).total_seconds()),
             },
             "publishing": {
                 "published_today": len(published_today),
