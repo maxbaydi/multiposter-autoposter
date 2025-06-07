@@ -81,7 +81,34 @@ SHUTDOWN_REQUESTED = False
 def signal_handler(signum, frame):
     """Обработчик сигналов для graceful shutdown"""
     global SHUTDOWN_REQUESTED
-    log_print("🛑 Получен сигнал завершения. Инициируется graceful shutdown...", 'warning')
+    signal_names = {
+        signal.SIGTERM: "SIGTERM",
+        signal.SIGINT: "SIGINT (Ctrl+C)",
+        signal.SIGHUP: "SIGHUP",
+        signal.SIGQUIT: "SIGQUIT"
+    }
+    
+    signal_name = signal_names.get(signum, f"Unknown signal {signum}")
+    log_print(f"🛑 Получен сигнал завершения: {signal_name}. Инициируется graceful shutdown...", 'warning')
+    log_print(f"🔍 Детали сигнала: номер={signum}, источник=system", 'warning')
+    
+    # Записываем причину завершения в отдельный файл для диагностики
+    shutdown_info_file = os.path.join(BASE_DIR, 'last_shutdown.info')
+    try:
+        with open(shutdown_info_file, 'w', encoding='utf-8') as f:
+            import json
+            shutdown_info = {
+                "timestamp": datetime.now().isoformat(),
+                "signal": signal_name,
+                "signal_number": signum,
+                "reason": "system_signal",
+                "graceful": True
+            }
+            json.dump(shutdown_info, f, indent=2, ensure_ascii=False)
+        log_print(f"📄 Информация о завершении сохранена в {shutdown_info_file}", 'info')
+    except Exception as e:
+        log_print(f"⚠️ Не удалось сохранить информацию о завершении: {e}", 'warning')
+    
     SHUTDOWN_REQUESTED = True
 
 # Регистрируем обработчики сигналов
@@ -277,12 +304,9 @@ def calculate_next_post_time():
     now = datetime.now()
     published_today = get_published_today(DB_PATH)
     posts_count_today = len(published_today)
-    total_window_seconds = (PUBLISH_WINDOW[1] - PUBLISH_WINDOW[0]) * 3600
-    if POSTS_PER_DAY > 1:
-        interval_seconds = total_window_seconds // (POSTS_PER_DAY - 1)
-    else:
-        interval_seconds = total_window_seconds
-
+    
+    log_print(f"🔍 Планирование: текущее время {now.strftime('%H:%M:%S')}, опубликовано сегодня: {posts_count_today}/{POSTS_PER_DAY}", 'debug')
+    
     # Если достигнут лимит постов на сегодня
     if posts_count_today >= POSTS_PER_DAY:
         tomorrow = (now + timedelta(days=1)).replace(
@@ -291,34 +315,43 @@ def calculate_next_post_time():
             second=0, 
             microsecond=0
         )
+        log_print(f"🔍 Лимит постов достигнут ({posts_count_today}/{POSTS_PER_DAY}), следующий пост завтра", 'debug')
         return tomorrow, "завтра в " + str(PUBLISH_WINDOW[0]).zfill(2) + ":00 (лимит " + str(POSTS_PER_DAY) + " постов/день достигнут)"
 
     # Если сейчас время публикации
     if PUBLISH_WINDOW[0] <= now.hour < PUBLISH_WINDOW[1]:
-        # Следующий пост в равномерном интервале
-        first_post_time = now.replace(hour=PUBLISH_WINDOW[0], minute=0, second=0, microsecond=0)
-        next_time = first_post_time + timedelta(seconds=interval_seconds * posts_count_today)
-        if next_time <= now:
-            next_time = now + timedelta(seconds=INTERVAL_MIN)
-        # Проверяем, не выходит ли время за окно публикации
-        if next_time.hour >= PUBLISH_WINDOW[1]:
-            tomorrow = (now + timedelta(days=1)).replace(
-                hour=PUBLISH_WINDOW[0], 
-                minute=0, 
-                second=0, 
-                microsecond=0
-            )
-            return tomorrow, "завтра в " + str(PUBLISH_WINDOW[0]).zfill(2) + ":00 (выход за окно публикации)"
-        # ИСПРАВЛЕНИЕ: Правильный расчёт разности времени
-        time_diff = next_time - now
-        total_seconds = time_diff.total_seconds()
-        hours = int(total_seconds // 3600)
-        minutes = int((total_seconds % 3600) // 60)
-        if hours > 0:
-            time_desc = "через " + str(hours) + "ч " + str(minutes) + "мин"
-        else:
-            time_desc = "через " + str(minutes) + "мин"
-        return next_time, time_desc
+        # Вычисляем слоты для сегодня
+        slots = get_today_slots()
+        log_print(f"🔍 В окне публикации, слоты на сегодня: {[f'{s.hour:02d}:{s.minute:02d}' for s in slots]}", 'debug')
+        
+        # Ищем следующий неиспользованный слот
+        for i, slot in enumerate(slots):
+            slot_time = now.replace(hour=slot.hour, minute=slot.minute, second=0, microsecond=0)
+            
+            # Если слот в будущем и мы еще не достигли нужного количества постов для этого слота
+            if slot_time > now and posts_count_today <= i:
+                time_diff = slot_time - now
+                total_seconds = time_diff.total_seconds()
+                hours = int(total_seconds // 3600)
+                minutes = int((total_seconds % 3600) // 60)
+                
+                if hours > 0:
+                    time_desc = "через " + str(hours) + "ч " + str(minutes) + "мин"
+                else:
+                    time_desc = "через " + str(minutes) + "мин"
+                
+                log_print(f"🔍 Найден следующий слот: {slot_time.strftime('%H:%M')}, {time_desc}", 'debug')
+                return slot_time, time_desc
+        
+        # Если все слоты на сегодня заняты или прошли
+        log_print("🔍 Все слоты на сегодня использованы, переходим на завтра", 'debug')
+        tomorrow = (now + timedelta(days=1)).replace(
+            hour=PUBLISH_WINDOW[0], 
+            minute=0, 
+            second=0, 
+            microsecond=0
+        )
+        return tomorrow, "завтра в " + str(PUBLISH_WINDOW[0]).zfill(2) + ":00 (все слоты на сегодня использованы)"
 
     # Если сейчас время вне окна публикации
     if now.hour < PUBLISH_WINDOW[0]:
@@ -328,6 +361,7 @@ def calculate_next_post_time():
             second=0, 
             microsecond=0
         )
+        log_print(f"🔍 До начала окна публикации, начало в {today_start.strftime('%H:%M')}", 'debug')
         return today_start, "сегодня в " + str(PUBLISH_WINDOW[0]).zfill(2) + ":00"
     else:
         tomorrow = (now + timedelta(days=1)).replace(
@@ -336,6 +370,7 @@ def calculate_next_post_time():
             second=0, 
             microsecond=0
         )
+        log_print(f"🔍 После окна публикации, следующий пост завтра в {tomorrow.strftime('%H:%M')}", 'debug')
         return tomorrow, "завтра в " + str(PUBLISH_WINDOW[0]).zfill(2) + ":00"
 
 def format_next_post_message():
@@ -511,19 +546,60 @@ def reset_today():
 def get_today_slots():
     """
     Возвращает список времён публикаций (datetime.time) для текущего дня
+    с учетом случайных интервалов в заданных пределах
     """
     slots = []
     start, end = PUBLISH_WINDOW
-    total_seconds = (end - start) * 3600
+    total_window_minutes = (end - start) * 60
+    
+    log_print(f"🔍 Генерация слотов: окно {start}:00-{end}:00, постов в день: {POSTS_PER_DAY}", 'debug')
+    
     if POSTS_PER_DAY == 1:
-        slots = [dtime(hour=start, minute=0)]
+        # Если только один пост в день, размещаем его в случайное время в окне
+        random_minutes = random.randint(0, total_window_minutes)
+        slot_hour = start + random_minutes // 60
+        slot_minute = random_minutes % 60
+        slots = [dtime(hour=slot_hour, minute=slot_minute)]
+        log_print(f"🔍 Один пост в день: слот {slot_hour:02d}:{slot_minute:02d}", 'debug')
     else:
-        interval = total_seconds // (POSTS_PER_DAY - 1)
+        # Равномерное распределение с небольшими случайными отклонениями
+        base_interval_minutes = total_window_minutes // (POSTS_PER_DAY - 1)
+        
         for i in range(POSTS_PER_DAY):
-            slot_seconds = start * 3600 + interval * i
-            slot_hour = slot_seconds // 3600
-            slot_minute = (slot_seconds % 3600) // 60
-            slots.append(dtime(hour=int(slot_hour), minute=int(slot_minute)))
+            if i == 0:
+                # Первый пост в начале окна с небольшим отклонением
+                random_offset = random.randint(0, min(30, base_interval_minutes // 4))
+                slot_minutes = random_offset
+            elif i == POSTS_PER_DAY - 1:
+                # Последний пост ближе к концу окна с отступом
+                random_offset = random.randint(-min(30, base_interval_minutes // 4), 0)
+                slot_minutes = total_window_minutes + random_offset - 10  # 10 минут до конца
+            else:
+                # Средние посты с случайным отклонением ±15 минут
+                base_minutes = base_interval_minutes * i
+                random_offset = random.randint(-min(15, base_interval_minutes // 6), 
+                                             min(15, base_interval_minutes // 6))
+                slot_minutes = base_minutes + random_offset
+            
+            # Проверяем границы
+            slot_minutes = max(0, min(slot_minutes, total_window_minutes - 1))
+            
+            slot_hour = start + slot_minutes // 60
+            slot_minute = slot_minutes % 60
+            
+            # Убеждаемся что не выходим за окно публикации
+            if slot_hour >= end:
+                slot_hour = end - 1
+                slot_minute = 50
+            
+            slots.append(dtime(hour=slot_hour, minute=slot_minute))
+    
+    # Сортируем слоты по времени
+    slots.sort()
+    
+    slots_str = [f"{s.hour:02d}:{s.minute:02d}" for s in slots]
+    log_print(f"🔍 Сгенерированы слоты: {', '.join(slots_str)}", 'debug')
+    
     return slots
 
 def main_loop():
@@ -812,21 +888,118 @@ def help_message():
 ''')
 
 def write_health_check():
-    """Записывает файл health check с текущим временем и статусом"""
+    """Записывает файл health check с текущим временем, статусом и подробной диагностикой"""
     try:
+        now = datetime.now()
+        published_today = get_published_today(DB_PATH)
+        next_post_time, next_post_desc = calculate_next_post_time()
+        
+        # Получаем информацию о слотах
+        slots = get_today_slots()
+        slots_info = []
+        for i, slot in enumerate(slots):
+            slot_dt = now.replace(hour=slot.hour, minute=slot.minute, second=0, microsecond=0)
+            status = "completed" if len(published_today) > i else ("pending" if slot_dt > now else "missed")
+            slots_info.append({
+                "slot_number": i + 1,
+                "time": f"{slot.hour:02d}:{slot.minute:02d}",
+                "status": status,
+                "datetime": slot_dt.isoformat()
+            })
+        
+        # Статистика circuit breaker
+        circuit_breaker_info = {
+            "wordpress": {
+                "failures": WORDPRESS_FAILURES,
+                "threshold": CIRCUIT_BREAKER_THRESHOLD,
+                "is_open": is_circuit_breaker_open('wordpress'),
+                "open_time": WORDPRESS_CIRCUIT_OPEN_TIME
+            },
+            "telegram": {
+                "failures": TELEGRAM_FAILURES,
+                "threshold": CIRCUIT_BREAKER_THRESHOLD,
+                "is_open": is_circuit_breaker_open('telegram'),
+                "open_time": TELEGRAM_CIRCUIT_OPEN_TIME
+            }
+        }
+        
+        # Информация о последнем завершении
+        shutdown_info_file = os.path.join(BASE_DIR, 'last_shutdown.info')
+        last_shutdown = None
+        if os.path.exists(shutdown_info_file):
+            try:
+                with open(shutdown_info_file, 'r', encoding='utf-8') as f:
+                    last_shutdown = json.load(f)
+            except:
+                pass
+        
         health_data = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": now.isoformat(),
             "status": "running",
             "pid": os.getpid(),
-            "published_today": len(get_published_today(DB_PATH)),
-            "posts_per_day": POSTS_PER_DAY,
-            "wordpress_failures": WORDPRESS_FAILURES,
-            "telegram_failures": TELEGRAM_FAILURES
+            "uptime": {
+                "started_at": now.isoformat(),  # Это можно улучшить, сохраняя время старта
+                "check_interval": HEALTH_CHECK_INTERVAL
+            },
+            "publishing": {
+                "published_today": len(published_today),
+                "posts_per_day": POSTS_PER_DAY,
+                "window": PUBLISH_WINDOW,
+                "next_post": {
+                    "time": next_post_time.isoformat(),
+                    "description": next_post_desc
+                },
+                "slots": slots_info
+            },
+            "circuit_breaker": circuit_breaker_info,
+            "configuration": {
+                "interval_min": INTERVAL_MIN,
+                "interval_max": INTERVAL_MAX,
+                "max_retries": MAX_RETRIES,
+                "retry_delay": RETRY_DELAY,
+                "check_interval": CHECK_INTERVAL
+            },
+            "system": {
+                "shutdown_requested": SHUTDOWN_REQUESTED,
+                "image_path": IMG_BASE_PATH,
+                "config_files": {
+                    "config_exists": os.path.exists(CONFIG_PATH),
+                    "theme_exists": os.path.exists(THEME_FILE),
+                    "db_exists": os.path.exists(DB_PATH)
+                }
+            },
+            "last_shutdown": last_shutdown
         }
+        
         with open(HEALTH_FILE, 'w', encoding='utf-8') as f:
-            json.dump(health_data, f, indent=2)
+            json.dump(health_data, f, indent=2, ensure_ascii=False)
+            
+        # Периодически выводим краткую диагностику в лог (каждые 10 health checks)
+        if hasattr(write_health_check, 'check_counter'):
+            write_health_check.check_counter += 1
+        else:
+            write_health_check.check_counter = 1
+            
+        if write_health_check.check_counter % 10 == 0:
+            missed_slots = [s for s in slots_info if s["status"] == "missed"]
+            if missed_slots:
+                log_print(f"⚠️ Диагностика: пропущено слотов: {len(missed_slots)}", 'warning')
+            log_print(f"📊 Диагностика: опубликовано {len(published_today)}/{POSTS_PER_DAY}, circuit breaker WP:{WORDPRESS_FAILURES} TG:{TELEGRAM_FAILURES}", 'debug')
+    
     except Exception as e:
         log_print("⚠️ Ошибка записи health check: " + str(e), 'warning')
+        # Записываем минимальный health check в случае ошибки
+        try:
+            minimal_health = {
+                "timestamp": datetime.now().isoformat(),
+                "status": "running_with_errors",
+                "pid": os.getpid(),
+                "error": str(e)
+            }
+            with open(HEALTH_FILE, 'w', encoding='utf-8') as f:
+                json.dump(minimal_health, f, indent=2)
+        except:
+            pass
 
 def is_circuit_breaker_open(service_name):
     """Проверяет, открыт ли circuit breaker для сервиса"""
